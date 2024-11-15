@@ -58,6 +58,15 @@ const formVisible = ref(false)
 const isTranslatorAvailable = ref(false)
 const detector = ref(null)
 
+useHead({
+  meta: [
+    {
+      httpEquiv: 'origin-trial',
+      content: 'Ags1mjCAE7FJKJRuBw2GGH4LymJ7FzNQg36i76FLVoztaagiT4hKn3oHUIWZGz7xh3Maea+hCLPQeHl7z3lvEAQAAABPeyJvcmlnaW4iOiJodHRwOi8vbG9jYWxob3N0OjgwIiwiZmVhdHVyZSI6IlRyYW5zbGF0aW9uQVBJIiwiZXhwaXJ5IjoxNzUzMTQyNDAwfQ==',
+    },
+  ],
+})
+
 // Check if translation API is supported and create detector
 onMounted(async () => {
   if (!('translation' in self) || !('createDetector' in self.translation)) {
