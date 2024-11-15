@@ -39,7 +39,7 @@
     </div>
 
     <footer class="mt-12 text-center text-sm text-gray-600">
-      Modified code from <a href="https://github.com/tomayac" class="underline"> @tomayac </a>. Source code on
+      Inspired by <a href="https://github.com/tomayac" class="underline"> @tomayac </a>. Source code on
       <a href="https://github.com/tomayac/translation-language-detection-api-playground" class="underline">GitHub</a>.
     </footer>
   </div>
@@ -58,7 +58,7 @@ const formVisible = ref(false)
 const isTranslatorAvailable = ref(false)
 const detector = ref(null)
 
-// Check if translation API is supported
+// Check if translation API is supported and create detector
 onMounted(async () => {
   if (!('translation' in self) || !('createDetector' in self.translation)) {
     isSupported.value = false
@@ -66,6 +66,7 @@ onMounted(async () => {
   }
 
   try {
+    // Create the detector
     detector.value = await self.translation.createDetector()
     formVisible.value = true
   } catch (err) {
@@ -75,15 +76,19 @@ onMounted(async () => {
 
 // Detect language on input change
 watchEffect(async () => {
-  if (!inputText.value.trim()) {
+  if (!detector.value || !inputText.value.trim()) {
     detectedLanguage.value = 'not sure what language this is'
     detectionConfidence.value = 0
     return
   }
-  
-  const { detectedLanguage: lang, confidence } = (await detector.value.detect(inputText.value.trim()))[0]
-  detectedLanguage.value = languageTagToHumanReadable(lang, 'en')
-  detectionConfidence.value = (confidence * 100).toFixed(1)
+
+  try {
+    const { detectedLanguage: lang, confidence } = (await detector.value.detect(inputText.value.trim()))[0]
+    detectedLanguage.value = languageTagToHumanReadable(lang, 'en')
+    detectionConfidence.value = (confidence * 100).toFixed(1)
+  } catch (err) {
+    console.error('Error detecting language:', err)
+  }
 })
 
 // Convert language tag to human-readable format
@@ -96,18 +101,23 @@ const languageTagToHumanReadable = (languageTag, targetLanguage) => {
 
 // Handle translation
 const handleTranslate = async () => {
+  if (!detector.value) {
+    outputText.value = 'Translation feature is not available.'
+    return
+  }
+
   try {
     const sourceLanguage = (await detector.value.detect(inputText.value.trim()))[0].detectedLanguage
     if (!['en', 'ja', 'es'].includes(sourceLanguage)) {
       outputText.value = 'Currently, only English ↔ Spanish and English ↔ Japanese are supported.'
       return
     }
-    
+
     const translator = await self.translation.createTranslator({
       sourceLanguage,
       targetLanguage: targetLanguage.value,
     })
-    
+
     outputText.value = await translator.translate(inputText.value.trim())
   } catch (err) {
     outputText.value = 'An error occurred. Please try again.'
