@@ -1,117 +1,121 @@
 <template>
-  <div class="p-6 max-w-lg mx-auto">
-    <h2 class="text-2xl font-bold mb-4">Support Chat with Auto Translate</h2>
+  <div class="min-h-screen bg-gray-100 p-4 flex flex-col items-center">
+    <h1 class="text-2xl font-bold mb-6">💬 Translator and Language Detector API Playground</h1>
 
-    <!-- Input Form -->
-    <form v-if="formVisible" @submit="translateText" class="space-y-4">
-      <textarea
-        v-model="inputText"
-        @input="detectLanguage"
-        placeholder="Type your message..."
-        class="w-full p-2 border rounded"
-      ></textarea>
+    <div v-if="!isSupported" class="text-red-600 mb-4">
+      Your browser doesn't support the Translator or Language Detector APIs. If you're in Chrome, join the
+      <a href="https://developer.chrome.com/docs/ai/built-in#get_an_early_preview" class="underline text-blue-500">
+        Early Preview Program
+      </a>
+      to enable it.
+    </div>
 
-      <p class="text-sm text-gray-600">
-        Detected Language: <span class="font-medium">{{ detectedLanguage }}</span>
-        <span v-if="confidence">({{ confidence }})</span>
+    <form @submit.prevent="handleTranslate" v-show="formVisible" class="w-full max-w-md space-y-4">
+      <div>
+        <label for="input" class="block text-lg font-semibold">Input:</label>
+        <textarea id="input" v-model="inputText" class="w-full p-2 border rounded"></textarea>
+      </div>
+
+      <p v-if="detectedLanguage" class="text-sm text-gray-600">
+        I'm {{ detectionConfidence }}% sure that this is {{ detectedLanguage }}
       </p>
 
-      <select v-model="targetLanguage" class="border p-2 rounded">
-        <option value="en">English</option>
-        <option value="es">Spanish</option>
-        <option value="ja">Japanese</option>
-      </select>
-
-      <button
-        type="submit"
-        class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600"
-      >
-        Translate
-      </button>
+      <div v-if="isTranslatorAvailable">
+        <label for="translate" class="block text-lg font-semibold">Translate to:</label>
+        <select id="translate" v-model="targetLanguage" class="w-full p-2 border rounded">
+          <option value="en">English</option>
+          <option value="ja">Japanese</option>
+          <option value="es">Spanish</option>
+        </select>
+        <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded mt-4">Translate</button>
+      </div>
     </form>
 
-    <!-- Output -->
-    <output
-      v-if="outputText"
-      class="block mt-4 p-4 bg-gray-100 border rounded"
-    >
-      {{ outputText }}
-    </output>
+    <div v-if="outputText" class="mt-6 w-full max-w-md">
+      <label for="output" class="block text-lg font-semibold">Translation:</label>
+      <output id="output" class="w-full p-2 border rounded bg-white text-gray-700">
+        {{ outputText }}
+      </output>
+    </div>
+
+    <footer class="mt-12 text-center text-sm text-gray-600">
+      Modified code from <a href="https://github.com/tomayac" class="underline"> @tomayac </a>. Source code on
+      <a href="https://github.com/tomayac/translation-language-detection-api-playground" class="underline">GitHub</a>.
+    </footer>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watchEffect } from 'vue'
 
-const inputText = ref('');
-const outputText = ref('');
-const detectedLanguage = ref('');
-const confidence = ref('');
-const targetLanguage = ref('en');
-const formVisible = ref(false);
+const inputText = ref('Hello, world!')
+const detectedLanguage = ref('')
+const detectionConfidence = ref(0)
+const outputText = ref('')
+const targetLanguage = ref('es')
+const isSupported = ref(true)
+const formVisible = ref(false)
+const isTranslatorAvailable = ref(false)
+const detector = ref(null)
 
-let detector = null;
-let translator = null;
-
-// Initialize the detector and translator
-const initTranslation = async () => {
+// Check if translation API is supported
+onMounted(async () => {
   if (!('translation' in self) || !('createDetector' in self.translation)) {
-    console.error('Translation API not supported in your browser.');
-    return;
+    isSupported.value = false
+    return
   }
-
-  detector = await self.translation.createDetector();
-
-  // Make form visible after initialization
-  formVisible.value = true;
-};
-
-const detectLanguage = async () => {
-  if (!inputText.value.trim()) {
-    detectedLanguage.value = 'Not sure what language this is';
-    confidence.value = '';
-    return;
-  }
-
-  const { detectedLanguage: lang, confidence: conf } = (
-    await detector.detect(inputText.value.trim())
-  )[0];
-
-  confidence.value = `${(conf * 100).toFixed(1)}%`;
-  detectedLanguage.value = languageTagToHumanReadable(lang, 'en');
-};
-
-const translateText = async (event) => {
-  event.preventDefault();
-
-  if (!detector || !inputText.value.trim()) return;
 
   try {
-    const sourceLanguage = (await detector.detect(inputText.value.trim()))[0].detectedLanguage;
-
-    if (!['en', 'es', 'ja'].includes(sourceLanguage)) {
-      outputText.value = 'Currently, only English ↔ Spanish and English ↔ Japanese are supported.';
-      return;
-    }
-
-    translator = await self.translation.createTranslator({
-      sourceLanguage,
-      targetLanguage: targetLanguage.value,
-    });
-
-    outputText.value = await translator.translate(inputText.value.trim());
-  } catch (error) {
-    outputText.value = 'An error occurred. Please try again.';
-    console.error(error.name, error.message);
+    detector.value = await self.translation.createDetector()
+    formVisible.value = true
+  } catch (err) {
+    isSupported.value = false
   }
-};
+})
 
+// Detect language on input change
+watchEffect(async () => {
+  if (!inputText.value.trim()) {
+    detectedLanguage.value = 'not sure what language this is'
+    detectionConfidence.value = 0
+    return
+  }
+  
+  const { detectedLanguage: lang, confidence } = (await detector.value.detect(inputText.value.trim()))[0]
+  detectedLanguage.value = languageTagToHumanReadable(lang, 'en')
+  detectionConfidence.value = (confidence * 100).toFixed(1)
+})
+
+// Convert language tag to human-readable format
 const languageTagToHumanReadable = (languageTag, targetLanguage) => {
   const displayNames = new Intl.DisplayNames([targetLanguage], {
     type: 'language',
-  });
-  return displayNames.of(languageTag);
-};
+  })
+  return displayNames.of(languageTag)
+}
 
-onMounted(initTranslation);
+// Handle translation
+const handleTranslate = async () => {
+  try {
+    const sourceLanguage = (await detector.value.detect(inputText.value.trim()))[0].detectedLanguage
+    if (!['en', 'ja', 'es'].includes(sourceLanguage)) {
+      outputText.value = 'Currently, only English ↔ Spanish and English ↔ Japanese are supported.'
+      return
+    }
+    
+    const translator = await self.translation.createTranslator({
+      sourceLanguage,
+      targetLanguage: targetLanguage.value,
+    })
+    
+    outputText.value = await translator.translate(inputText.value.trim())
+  } catch (err) {
+    outputText.value = 'An error occurred. Please try again.'
+    console.error(err)
+  }
+}
 </script>
+
+<style scoped>
+/* Scoped styling if necessary */
+</style>
